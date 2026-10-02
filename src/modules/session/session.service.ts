@@ -250,6 +250,10 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
     await this.ownership?.releaseAll();
   }
 
+  getEngineType(): string {
+    return this.configService?.get<string>('engine.type') || 'whatsapp-web.js';
+  }
+
   async create(dto: CreateSessionDto): Promise<Session> {
     // Check if session with same name exists
     const existing = await this.sessionRepository.findOne({
@@ -588,22 +592,6 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
    */
   private requireEngine(id: string): IWhatsAppEngine {
     return this.engines.require(id);
-  }
-
-  async getGroups(
-    id: string,
-    opts: ListOptions = {},
-  ): Promise<{ id: string; name: string; linkedParentJID?: string | null }[]> {
-    await this.findOne(id); // Verify session exists
-    const engine = this.requireEngine(id);
-
-    const groups = await engine.getGroups();
-    const mapped = groups.map(g => ({
-      id: g.id,
-      name: g.name,
-      linkedParentJID: g.linkedParentJID,
-    }));
-    return paginate(mapped, opts.limit, opts.offset);
   }
 
   async getChats(id: string, opts: ListOptions = {}): Promise<ChatSummary[]> {

@@ -94,6 +94,13 @@ export class SessionResponseDto {
   })
   engineLoaded!: boolean;
 
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Active WhatsApp engine implementation name (e.g. whatsapp-web.js, baileys)',
+    example: 'whatsapp-web.js',
+  })
+  engine?: string;
+
   /**
    * Map a Session entity to the public response shape, stripping sensitive
    * engine config fields (`config`, `proxyUrl`, `proxyType`) that must not
@@ -104,7 +111,7 @@ export class SessionResponseDto {
    * a default of `false` would silently tell clients "no engine" for whole surfaces (the MCP tools,
    * any future caller) and the dashboard would then offer Start to a running session.
    */
-  static fromEntity(session: Session, engineLoaded: boolean): SessionResponseDto {
+  static fromEntity(session: Session, engineLoaded: boolean, engine?: string): SessionResponseDto {
     return {
       id: session.id,
       name: session.name,
@@ -126,6 +133,7 @@ export class SessionResponseDto {
           }
         : null,
       engineLoaded,
+      engine: engine ?? 'whatsapp-web.js',
     };
   }
 }

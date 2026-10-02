@@ -15,11 +15,13 @@ import { SessionRestrictionStore } from './session-restriction-store.service';
 import { PresenceStore } from './presence-store.service';
 import { SessionController } from './session.controller';
 import { WebhookModule } from '../webhook/webhook.module';
+import { MediaModule } from '../media/media.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Session, Message], 'data'),
     WebhookModule,
+    MediaModule,
   ],
   controllers: [SessionController],
   providers: [

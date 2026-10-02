@@ -11,23 +11,31 @@ export interface MetaMessage {
     caption?: string;
     mime_type?: string;
     sha256?: string;
+    media_path?: string;
+    link?: string;
   };
   video?: {
     id: string;
     caption?: string;
     mime_type?: string;
     sha256?: string;
+    media_path?: string;
+    link?: string;
   };
   audio?: {
     id: string;
     mime_type?: string;
     voice?: boolean;
+    media_path?: string;
+    link?: string;
   };
   document?: {
     id: string;
     filename?: string;
     caption?: string;
     mime_type?: string;
+    media_path?: string;
+    link?: string;
   };
   location?: {
     latitude: number;
@@ -64,12 +72,15 @@ export interface MetaWebhookPayload {
         metadata: {
           display_phone_number: string;
           phone_number_id: string;
+          platform?: string;
         };
         contacts?: Array<{
           profile: {
             name: string;
           };
           wa_id: string;
+          external_id?: string;
+          from_jid?: string;
         }>;
         messages?: MetaMessage[];
         statuses?: MetaStatus[];
@@ -78,6 +89,10 @@ export interface MetaWebhookPayload {
           status?: string;
           qr?: string;
           reason?: string;
+          me?: {
+            id?: string;
+            pushName?: string;
+          };
         };
       };
       field: 'messages';
@@ -124,9 +139,13 @@ export class MetaWebhookTransformer {
   }
 
   /**
-   * Main transformer: converts any OpenWA internal event into a Meta-compatible webhook payload
+   * Transform internal OpenWA message/status event to standard Meta WhatsApp Cloud Webhook format.
    */
-  static transform(sessionId: string, event: string, data: Record<string, unknown>): MetaWebhookPayload {
+  static transform(
+    sessionId: string,
+    event: string,
+    data: Record<string, unknown>,
+  ): MetaWebhookPayload {
     const phoneId = sessionId;
     const displayPhone = typeof data.displayPhone === 'string' ? data.displayPhone : '';
 
@@ -135,13 +154,16 @@ export class MetaWebhookTransformer {
       metadata: {
         display_phone_number: displayPhone,
         phone_number_id: phoneId,
+        platform: 'whatsapp_unofficial',
       },
     };
 
     if (event === 'message.received') {
       const fromJid = (data.from as string) || (data.author as string) || '';
-      const from = this.cleanWaId(fromJid);
-      const pushName = (data.pushName as string) || (data.notifyName as string) || (data.chatName as string) || from;
+      const contactObj = (data.contact as Record<string, unknown>) || {};
+      const resolvedNumber = (contactObj.number as string) || (data.phone as string) || '';
+      const from = resolvedNumber ? this.cleanWaId(resolvedNumber) : this.cleanWaId(fromJid);
+      const pushName = (contactObj.pushName as string) || (contactObj.name as string) || (data.pushName as string) || (data.notifyName as string) || (data.chatName as string) || from;
       const rawId = (data.id as string) || (data.waMessageId as string) || '';
       const wamid = this.toWamid(rawId);
       const timestamp = this.toEpochSeconds(data.timestamp as string | number);
@@ -151,43 +173,63 @@ export class MetaWebhookTransformer {
         {
           profile: { name: pushName },
           wa_id: from,
+          external_id: fromJid,
+          from_jid: fromJid,
         },
       ];
 
-      const metaMsg: MetaMessage = {
+      const metaMsg: MetaMessage & { external_id?: string; from_jid?: string } = {
         from,
         id: wamid,
         timestamp,
         type,
+        external_id: fromJid,
+        from_jid: fromJid,
       };
 
       if (type === 'text') {
         metaMsg.text = { body: (data.body as string) || '' };
       } else if (type === 'image') {
+        const mediaPath = typeof data.mediaPath === 'string' && data.mediaPath ? data.mediaPath : undefined;
+        const mediaLink = (data.mediaUrl as string) || (mediaPath ? `/media/stream/${mediaPath}` : undefined);
         metaMsg.image = {
-          id: (data.mediaPath as string) || (data.mediaUrl as string) || (data.id as string) || '',
+          id: wamid,
           caption: (data.caption as string) || undefined,
           mime_type: (data.mimetype as string) || (data.mimeType as string) || 'image/jpeg',
+          media_path: mediaPath,
+          link: mediaLink,
         };
       } else if (type === 'video') {
+        const mediaPath = typeof data.mediaPath === 'string' && data.mediaPath ? data.mediaPath : undefined;
+        const mediaLink = (data.mediaUrl as string) || (mediaPath ? `/media/stream/${mediaPath}` : undefined);
         metaMsg.video = {
-          id: (data.mediaPath as string) || (data.mediaUrl as string) || (data.id as string) || '',
+          id: wamid,
           caption: (data.caption as string) || undefined,
           mime_type: (data.mimetype as string) || (data.mimeType as string) || 'video/mp4',
+          media_path: mediaPath,
+          link: mediaLink,
         };
       } else if (type === 'audio' || type === 'ptt' || type === 'voice') {
+        const mediaPath = typeof data.mediaPath === 'string' && data.mediaPath ? data.mediaPath : undefined;
+        const mediaLink = (data.mediaUrl as string) || (mediaPath ? `/media/stream/${mediaPath}` : undefined);
         metaMsg.type = 'audio';
         metaMsg.audio = {
-          id: (data.mediaPath as string) || (data.mediaUrl as string) || (data.id as string) || '',
+          id: wamid,
           mime_type: (data.mimetype as string) || (data.mimeType as string) || 'audio/ogg',
           voice: type === 'ptt' || type === 'voice',
+          media_path: mediaPath,
+          link: mediaLink,
         };
       } else if (type === 'document') {
+        const mediaPath = typeof data.mediaPath === 'string' && data.mediaPath ? data.mediaPath : undefined;
+        const mediaLink = (data.mediaUrl as string) || (mediaPath ? `/media/stream/${mediaPath}` : undefined);
         metaMsg.document = {
-          id: (data.mediaPath as string) || (data.mediaUrl as string) || (data.id as string) || '',
+          id: wamid,
           filename: (data.filename as string) || 'document',
           caption: (data.caption as string) || undefined,
           mime_type: (data.mimetype as string) || (data.mimeType as string) || 'application/octet-stream',
+          media_path: mediaPath,
+          link: mediaLink,
         };
       } else if (type === 'location') {
         metaMsg.location = {
@@ -245,11 +287,15 @@ export class MetaWebhookTransformer {
       entryChangesValue.statuses = [metaStatus];
     } else {
       // Extended event for session status/qr/etc
+      const meData = (data.me as { id?: string; pushName?: string } | undefined) ||
+        (data.phone ? { id: data.phone as string, pushName: data.pushName as string } : undefined);
+
       entryChangesValue.session_event = {
         event,
         status: data.status as string | undefined,
         qr: data.qr as string | undefined,
         reason: data.reason as string | undefined,
+        me: meData,
       };
     }
 

@@ -21,8 +21,21 @@ export async function persistHistoryMessages(
   const storeEphemeralMessages = resolveFeatureFlags(configService).storeEphemeralMessages;
   const byId = new Map<string, IncomingMessage>();
   for (const m of messages) {
-    // Need an id to de-dup; chatId/from/to are NOT NULL; status/story posts aren't chats.
-    if (!m.id || m.isStatusBroadcast || !m.chatId || !m.from || !m.to) {
+    // Need an id to de-dup; chatId/from/to are NOT NULL; group/newsletter/broadcast/status posts are excluded in 1:1 gateway.
+    if (
+      !m.id ||
+      m.isStatusBroadcast ||
+      m.isGroup ||
+      !m.chatId ||
+      !m.from ||
+      !m.to ||
+      m.from.endsWith('@g.us') ||
+      m.from.endsWith('@newsletter') ||
+      m.from.endsWith('@broadcast') ||
+      m.chatId.endsWith('@g.us') ||
+      m.chatId.endsWith('@newsletter') ||
+      m.chatId.endsWith('@broadcast')
+    ) {
       continue;
     }
     // Mirror the live onMessage guard: skip disappearing messages when the operator opted out, so a

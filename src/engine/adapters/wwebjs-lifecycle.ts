@@ -126,6 +126,8 @@ export class WwebjsLifecycle {
   status: EngineStatus = EngineStatus.DISCONNECTED;
   /** Last encoded QR, cleared on authentication. Aliased by the adapter's `qrCode` accessor. */
   qrCode: string | null = null;
+  /** Counter of QR generation attempts to prevent unbounded loops when un-scanned. */
+  private qrAttempts = 0;
   /** Own-account phone number, read once at readiness. */
   private phoneNumber: string | null = null;
   /** Own-account push name, read once at readiness. */
@@ -432,6 +434,24 @@ export class WwebjsLifecycle {
       if (this.tearingDown || this.disconnectReported || this.status === EngineStatus.FAILED || !this.client) {
         return;
       }
+
+      this.qrAttempts += 1;
+      if (this.qrAttempts > 3) {
+        this.host.logger.warn('QR code generation limit reached (3 attempts max). Stopping session to prevent infinite loop.', {
+          action: 'qr_timeout_expired',
+          attempts: this.qrAttempts,
+        });
+        this.qrCode = null;
+        this.setStatus(EngineStatus.FAILED);
+        this.host
+          .getCallbacks()
+          .onError?.(
+            'Batas scan QR Code tercapai (maksimal 3 kali). Silakan lakukan start/restart session untuk generate QR Code baru.',
+          );
+        void this.disconnect();
+        return;
+      }
+
       // Capture the source client so the post-await fence can prove THIS client is still the live one.
       // qrcode.toDataURL() is an awaited macrotask: a 'disconnected' (or a teardown nulling this.client)
       // that lands during the encode leaves the pre-await guard stale. Encode to a LOCAL so the stored
@@ -462,6 +482,7 @@ export class WwebjsLifecycle {
     });
 
     this.client.on('authenticated', () => {
+      this.qrAttempts = 0;
       // Only the first authentication starts the reconcile window. Ignore a re-fired 'authenticated'
       // while already AUTHENTICATING (so it can't restart the 90s deadline), once READY/FAILED, or any
       // time after the adapter is finished — teardown, or a reported disconnect the lifecycle has not

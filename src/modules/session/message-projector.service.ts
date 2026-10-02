@@ -23,6 +23,7 @@ import {
 import { createLogger } from '../../common/services/logger.service';
 import { EventsGateway } from '../events/events.gateway';
 import { WebhookService } from '../webhook/webhook.service';
+import { MediaStorageService } from '../media/media-storage.service';
 import {
   deliveryStatusToMessageStatus,
   deliveryStatusToAck,
@@ -55,6 +56,7 @@ export class MessageProjector {
     private readonly eventsGateway: EventsGateway,
     private readonly webhookService: WebhookService,
     private readonly lidResolver: SessionLidResolver,
+    private readonly mediaStorage: MediaStorageService,
     @Optional()
     private readonly configService?: ConfigService,
   ) {
@@ -69,13 +71,28 @@ export class MessageProjector {
 
   handleInboundMessage(id: string, engine: IWhatsAppEngine, message: IncomingMessage): void {
     if (!this.engines.isLive(id, engine)) return;
-    if (message.isStatusBroadcast) return;
+    if (
+      message.type === 'unknown' ||
+      message.isGroup ||
+      message.isStatusBroadcast ||
+      message.from?.endsWith('@g.us') ||
+      message.from?.endsWith('@newsletter') ||
+      message.from?.endsWith('@broadcast') ||
+      message.chatId?.endsWith('@g.us') ||
+      message.chatId?.endsWith('@newsletter') ||
+      message.chatId?.endsWith('@broadcast')
+    ) {
+      return;
+    }
     if (this.shouldSkipEphemeralMessage(id, message)) return;
 
-    this.logger.debug(`Message received from ${message.from}`, {
+    this.logger.log(`Message received from ${message.from}`, {
       sessionId: id,
       messageId: message.id,
       from: message.from,
+      type: message.type,
+      body: message.body ? message.body.slice(0, 100) : undefined,
+      hasMedia: Boolean(message.media),
       action: 'message_received',
     });
 
@@ -144,9 +161,33 @@ export class MessageProjector {
   ): Promise<void> {
     if (!this.engines.isLive(id, engine)) return;
 
+    let mediaUrl: string | undefined = undefined;
+    let mediaPath: string | undefined = undefined;
+
+    if (finalMessage.media && finalMessage.media.data && !finalMessage.media.omitted) {
+      try {
+        const uploadResult = await this.mediaStorage.saveMedia({
+          sessionId: id,
+          data: finalMessage.media.data,
+          mimetype: finalMessage.media.mimetype,
+          filename: finalMessage.media.filename,
+        });
+        mediaUrl = uploadResult.url;
+        mediaPath = uploadResult.key;
+        (finalMessage.media as unknown as Record<string, unknown>).url = uploadResult.url;
+        (finalMessage.media as unknown as Record<string, unknown>).key = uploadResult.key;
+      } catch (uploadErr) {
+        this.logger.error(`Failed to store incoming media for message ${finalMessage.id}`, String(uploadErr));
+      }
+    }
+
     await this.persistInboundMessage(id, finalMessage);
 
-    const webhookPayload = finalMessage as unknown as Record<string, unknown>;
+    const webhookPayload: Record<string, unknown> = {
+      ...(finalMessage as unknown as Record<string, unknown>),
+      ...(mediaUrl ? { mediaUrl } : {}),
+      ...(mediaPath ? { mediaPath } : {}),
+    };
     void this.webhookService.dispatch(id, 'message.received', webhookPayload);
     this.eventsGateway.emitMessage(id, webhookPayload);
   }
@@ -154,12 +195,26 @@ export class MessageProjector {
   handleOwnSendEcho(id: string, engine: IWhatsAppEngine, message: IncomingMessage): void {
     if (!this.engines.isLive(id, engine)) return;
     if (!message.fromMe) return;
-    if (message.isStatusBroadcast) return;
+    if (
+      message.isGroup ||
+      message.isStatusBroadcast ||
+      message.to?.endsWith('@g.us') ||
+      message.to?.endsWith('@newsletter') ||
+      message.to?.endsWith('@broadcast') ||
+      message.chatId?.endsWith('@g.us') ||
+      message.chatId?.endsWith('@newsletter') ||
+      message.chatId?.endsWith('@broadcast')
+    ) {
+      return;
+    }
 
-    this.logger.debug(`Message sent to ${message.to}`, {
+    this.logger.log(`Message sent to ${message.to}`, {
       sessionId: id,
       messageId: message.id,
       to: message.to,
+      type: message.type,
+      body: message.body ? message.body.slice(0, 100) : undefined,
+      hasMedia: Boolean(message.media),
       action: 'message_sent',
     });
 

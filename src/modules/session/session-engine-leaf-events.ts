@@ -3,7 +3,7 @@ import { Repository } from 'typeorm';
 import { Session } from './entities/session.entity';
 import { EventsGateway } from '../events/events.gateway';
 import { WebhookService } from '../webhook/webhook.service';
-import { GroupEvent, IWhatsAppEngine } from '../../engine/interfaces/whatsapp-engine.interface';
+import { IWhatsAppEngine } from '../../engine/interfaces/whatsapp-engine.interface';
 import { type createLogger } from '../../common/services/logger.service';
 
 export class SessionEngineLeafEvents {
@@ -30,39 +30,6 @@ export class SessionEngineLeafEvents {
   async seedStatuses(_sessionId: string, _engine: IWhatsAppEngine): Promise<void> {
     // Status store removed in lean edition
     return Promise.resolve();
-  }
-
-  dispatchGroupEvent(id: string, event: GroupEvent): void {
-    const payload: Record<string, unknown> = {
-      groupId: event.groupId,
-      participantIds: event.participantIds,
-      timestamp: event.timestamp,
-    };
-    if (event.actorId !== undefined) {
-      payload.actorId = event.actorId;
-    }
-    if (event.changes !== undefined) {
-      payload.changes = event.changes;
-    }
-
-    switch (event.kind) {
-      case 'join':
-        this.eventsGateway.emitGroupJoin(id, payload);
-        void this.webhookService.dispatch(id, 'group.join', payload);
-        break;
-      case 'leave':
-        this.eventsGateway.emitGroupLeave(id, payload);
-        void this.webhookService.dispatch(id, 'group.leave', payload);
-        break;
-      case 'update':
-        this.eventsGateway.emitGroupUpdate(id, payload);
-        void this.webhookService.dispatch(id, 'group.update', payload);
-        break;
-      case 'join_request':
-        this.eventsGateway.emitGroupJoinRequest(id, payload);
-        void this.webhookService.dispatch(id, 'group.join_request', payload);
-        break;
-    }
   }
 
   async maybeAutoRejectCall(id: string, engine: IWhatsAppEngine, callId: string): Promise<void> {

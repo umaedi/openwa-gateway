@@ -34,7 +34,6 @@ import {
   PairingCodeResponseDto,
   ChatSummaryDto,
   SessionActionResponseDto,
-  SessionGroupSummaryDto,
   SessionsOverviewResponseDto,
 } from './dto';
 import { Session } from './entities/session.entity';
@@ -56,7 +55,11 @@ export class SessionController {
   private transformSession(session: Session): SessionResponseDto {
     // isActive() is the engine map itself, so this is read at response time — a session that just
     // finished reconnecting reports the engine in the same response that reports its status.
-    return SessionResponseDto.fromEntity(session, this.sessionService.isActive(session.id));
+    return SessionResponseDto.fromEntity(
+      session,
+      this.sessionService.isActive(session.id),
+      this.sessionService.getEngineType(),
+    );
   }
 
   @Post()
@@ -345,39 +348,6 @@ export class SessionController {
     @Body() dto: RequestPairingCodeDto,
   ): Promise<PairingCodeResponseDto> {
     return this.sessionService.requestPairingCode(id, dto.phoneNumber);
-  }
-
-  // Shares a Path Item with GroupController's POST on the same route — one parameter name for the
-  // one positional segment, or the contract splits it into two entries.
-  @Get(':sessionId/groups')
-  @ApiOperation({ summary: 'Get all groups for a session' })
-  @ApiParam({ name: 'sessionId', description: 'Session ID' })
-  @ApiResponse({
-    status: 200,
-    description: 'List of groups the session is a member of',
-    type: [SessionGroupSummaryDto],
-  })
-  @ApiResponse({ status: 400, description: 'Session not ready' })
-  @ApiResponse({ status: 404, description: 'Session not found' })
-  @ApiResponse({
-    status: 503,
-    description:
-      'WhatsApp did not answer the group-list query. Deliberately not reported as an empty list — ' +
-      'the engine returns the same empty value for "you are in no groups", and a caller cannot tell ' +
-      'those apart from the body.',
-  })
-  @ApiResponse({ status: 409, description: ENGINE_NOT_READY_409 })
-  @ApiQuery({ name: 'limit', required: false, description: 'Max groups to return (1–1000, default 1000)' })
-  @ApiQuery({ name: 'offset', required: false, description: 'Number of groups to skip (for paging)' })
-  async getGroups(
-    @Param('sessionId', ParseUUIDPipe) id: string,
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-  ): Promise<{ id: string; name: string; linkedParentJID?: string | null }[]> {
-    return this.sessionService.getGroups(id, {
-      limit: limit ? parseInt(limit, 10) : undefined,
-      offset: offset ? parseInt(offset, 10) : undefined,
-    });
   }
 
   @Get(':sessionId/chats')

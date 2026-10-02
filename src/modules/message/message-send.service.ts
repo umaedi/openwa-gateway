@@ -320,25 +320,45 @@ export class MessageSendService {
   }
 
   async react(sessionId: string, dto: ReactMessageDto): Promise<void> {
+    this.assertDirectChatRecipient(dto.chatId);
     await this.pacing.assertSendAllowed(sessionId, dto.chatId);
     const engine = this.getEngine(sessionId);
     await engine.reactToMessage(dto.chatId, dto.messageId, dto.emoji);
   }
 
   async delete(sessionId: string, dto: DeleteMessageDto): Promise<void> {
+    this.assertDirectChatRecipient(dto.chatId);
     const engine = this.getEngine(sessionId);
     await engine.deleteMessage(dto.chatId, dto.messageId, dto.forEveryone ?? true);
   }
 
   async edit(sessionId: string, dto: EditMessageDto): Promise<void> {
+    this.assertDirectChatRecipient(dto.chatId);
     await this.pacing.assertSendAllowed(sessionId, dto.chatId);
     const engine = this.getEngine(sessionId);
     await engine.editMessage(dto.chatId, dto.messageId, dto.body, dto.mentions);
   }
 
+  private assertDirectChatRecipient(recipient: string): void {
+    if (
+      recipient.endsWith('@g.us') ||
+      recipient.endsWith('@newsletter') ||
+      recipient.endsWith('@broadcast') ||
+      recipient.includes('@broadcast')
+    ) {
+      throw new BadRequestException(
+        'Sending messages to groups, newsletters, or broadcast channels is not supported. Only 1:1 direct chats are allowed.',
+      );
+    }
+  }
+
   private async applySendingGate<T>(sessionId: string, _type: string, input: T): Promise<T> {
     const target = input as { chatId?: string; toChatId?: string };
-    await this.pacing.assertSendAllowed(sessionId, target.chatId ?? target.toChatId);
+    const dest = target.chatId ?? target.toChatId;
+    if (dest) {
+      this.assertDirectChatRecipient(dest);
+    }
+    await this.pacing.assertSendAllowed(sessionId, dest);
     return input;
   }
 

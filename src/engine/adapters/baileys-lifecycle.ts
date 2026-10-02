@@ -119,6 +119,8 @@ export class BaileysLifecycle {
   connectedAt = 0;
   private status: EngineStatus = EngineStatus.DISCONNECTED;
   private qrCode: string | null = null;
+  /** Counter of QR generation attempts to prevent unbounded loops when un-scanned. */
+  private qrAttempts = 0;
   private phoneNumber: string | null = null;
   private pushName: string | null = null;
   private intentionalClose = false;
@@ -373,6 +375,7 @@ export class BaileysLifecycle {
     }
 
     if (connection === 'open') {
+      this.qrAttempts = 0;
       this.qrCode = null;
       this.phoneNumber = this.host.extractPhone(this.sock?.user?.id);
       this.pushName = this.sock?.user?.name ?? null;
@@ -550,6 +553,23 @@ export class BaileysLifecycle {
 
   /** Render the raw Baileys QR ref to a PNG data URL, then publish it (mirrors the whatsapp-web.js engine). */
   private async handleQrCode(qr: string): Promise<void> {
+    this.qrAttempts += 1;
+    if (this.qrAttempts > 3) {
+      this.host.logger.warn('Baileys QR code generation limit reached (3 attempts max). Stopping session.', {
+        action: 'qr_timeout_expired',
+        attempts: this.qrAttempts,
+      });
+      this.qrCode = null;
+      this.setStatus(EngineStatus.FAILED);
+      this.host
+        .getOnError()
+        ?.(
+          'Batas scan QR Code tercapai (maksimal 3 kali). Silakan lakukan start/restart session untuk generate QR Code baru.',
+        );
+      void this.disconnect();
+      return;
+    }
+
     try {
       this.qrCode = await qrcode.toDataURL(qr);
       this.setStatus(EngineStatus.QR_READY);

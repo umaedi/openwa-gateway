@@ -16,22 +16,6 @@ export class SessionActionResponseDto {
   success!: boolean;
 }
 
-export class SessionGroupSummaryDto {
-  @ApiProperty({ description: 'Group id.', example: '120363000000000000@g.us' })
-  id!: string;
-
-  @ApiProperty({ description: 'Group subject.', example: 'Engineering' })
-  name!: string;
-
-  @ApiPropertyOptional({
-    type: String,
-    nullable: true,
-    description: 'JID of the parent community, or null when the group is standalone.',
-    example: null,
-  })
-  linkedParentJID?: string | null;
-}
-
 export class SessionMemoryUsageDto {
   @ApiProperty({ description: 'V8 heap in use, in MiB.', example: 128 })
   heapUsed!: number;

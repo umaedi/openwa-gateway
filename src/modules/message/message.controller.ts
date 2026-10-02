@@ -344,7 +344,7 @@ export class MessageController {
       'Useful for retrieving messages that arrived before the gateway was started.',
   })
   @ApiParam({ name: 'sessionId', description: 'Session ID' })
-  @ApiParam({ name: 'chatId', description: 'Chat ID (e.g. 1234567890@c.us or groupId@g.us)' })
+  @ApiParam({ name: 'chatId', description: 'Chat ID (e.g. 1234567890@c.us)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Max messages to return (default 50)' })
   @ApiQuery({
     name: 'includeMedia',

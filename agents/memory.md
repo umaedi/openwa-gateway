@@ -64,7 +64,7 @@
 
 ## 3. Module Inventory — KEEP vs REMOVE
 
-### ✅ KEEP (9 modules — inti gateway)
+### ✅ KEEP (8 modules — inti gateway 1:1 Direct Chat)
 
 | Module    | Alasan                                                                                 |
 | --------- | -------------------------------------------------------------------------------------- |
@@ -76,34 +76,36 @@
 | `events`  | **Realtime** — WebSocket/Socket.IO untuk stream QR code ke frontend                    |
 | `media`   | **Core** — handle media inbound (download dari WA) & outbound (upload)                 |
 | `contact` | **Utility** — check number exists, get profile picture                                 |
-| `group`   | **Utility** — basic group info (read-only, untuk tampil di chat list)                  |
 
-### ❌ REMOVE (22 modules)
+> **Catatan 1:1 Cloud API Parity**: Pesan masuk/keluar dari Group (`@g.us`), Newsletter/Channel (`@newsletter`), dan Broadcast (`@broadcast`) secara sengaja dihapus/diabaikan agar perilaku gateway 100% konsisten dengan Meta WhatsApp Cloud API resmi (hanya direct messaging 1:1).
 
-| Module         | Alasan hapus                                                 |
-| -------------- | ------------------------------------------------------------ |
-| `audit`        | nawasena punya audit sendiri                                 |
-| `automation`   | nawasena punya autoreply sendiri                             |
-| `call`         | Tidak dibutuhkan                                             |
-| `catalog`      | nawasena pakai Meta Catalog API langsung                     |
-| `channel`      | WhatsApp Channels/Newsletter — bukan fitur chat              |
-| `chat-media`   | Duplikasi — nawasena punya media storage Supabase            |
-| `docker`       | Built-in datastore orchestration — tidak diperlukan          |
-| `infra`        | Config management UI — nawasena punya dashboard sendiri      |
-| `integration`  | Plugin fabric — OpenWA INI SENDIRI adalah integrasi nawasena |
-| `label`        | Tidak dibutuhkan                                             |
-| `mcp`          | AI agent tools — tidak dibutuhkan                            |
-| `metrics`      | Prometheus metrics — overkill untuk gateway lean             |
-| `plugins`      | Plugin system — tidak dibutuhkan                             |
-| `profile`      | Set profile name/photo — bisa ditambah nanti jika perlu      |
-| `queue`        | BullMQ — webhook delivery cukup inline + simple retry        |
-| `search`       | Full-text search — nawasena handle di Supabase               |
-| `settings`     | Runtime settings UI — tidak diperlukan                       |
-| `stats`        | Statistics — tidak dibutuhkan                                |
-| `status`       | WhatsApp Status/Stories — bukan fitur chat                   |
-| `status-store` | Status stories storage — bukan fitur chat                    |
-| `takeover`     | Session takeover — tidak dibutuhkan                          |
-| `template`     | Template management — nawasena pakai Meta Templates API      |
+### ❌ REMOVE (23 modules)
+
+| Module         | Alasan hapus                                                                         |
+| -------------- | ------------------------------------------------------------------------------------ |
+| `group`        | Tidak dibutuhkan — fokus 1:1 direct chat ala Meta Cloud API                          |
+| `audit`        | nawasena punya audit sendiri                                                         |
+| `automation`   | nawasena punya autoreply sendiri                                                     |
+| `call`         | Tidak dibutuhkan                                                                     |
+| `catalog`      | nawasena pakai Meta Catalog API langsung                                             |
+| `channel`      | WhatsApp Channels/Newsletter — bukan fitur chat 1:1                                  |
+| `chat-media`   | Duplikasi — nawasena punya media storage Supabase                                    |
+| `docker`       | Built-in datastore orchestration — tidak diperlukan                                  |
+| `infra`        | Config management UI — nawasena punya dashboard sendiri                              |
+| `integration`  | Plugin fabric — OpenWA INI SENDIRI adalah integrasi nawasena                         |
+| `label`        | Tidak dibutuhkan                                                                     |
+| `mcp`          | AI agent tools — tidak dibutuhkan                                                    |
+| `metrics`      | Prometheus metrics — overkill untuk gateway lean                                     |
+| `plugins`      | Plugin system — tidak dibutuhkan                                                     |
+| `profile`      | Set profile name/photo — bisa ditambah nanti jika perlu                              |
+| `queue`        | BullMQ — webhook delivery cukup inline + simple retry                                |
+| `search`       | Full-text search — nawasena handle di Supabase                                       |
+| `settings`     | Runtime settings UI — tidak diperlukan                                               |
+| `stats`        | Statistics — tidak dibutuhkan                                                        |
+| `status`       | WhatsApp Status/Stories — bukan fitur chat 1:1                                       |
+| `status-store` | Status stories storage — bukan fitur chat 1:1                                        |
+| `takeover`     | Session takeover — tidak dibutuhkan                                                  |
+| `template`     | Template management — nawasena pakai Meta Templates API                              |
 
 ### 🔧 MODIFY (core & common)
 
@@ -238,14 +240,14 @@ interface MetaWebhookPayload {
 | `data.timestamp` (epoch s)  | `messages[].timestamp`                            |
 | `data.quotedMsg.id`         | `messages[].context.id`                           |
 
-#### Media Handling
+#### Media Handling (Cloudflare R2 / S3)
 
-Media yang diterima OpenWA harus bisa diakses oleh nawasena-backend. Dua opsi:
+Media yang diterima OpenWA (gambar, video, audio/voice note, dokumen) langsung diunggah ke **Cloudflare R2 (S3-compatible bucket `nawasena-chat`)**.
 
-1. **Opsi A (Recommended)**: OpenWA menyimpan media ke local disk, expose endpoint `GET /api/media/:id` yang mengembalikan file. nawasena-backend download dari sini (mirip Meta `getMediaUrl`).
-2. **Opsi B**: Inline base64 di webhook payload — berat, tidak scalable.
-
-Pilih **Opsi A**: media id di `messages[].image.id` = path file di OpenWA, nawasena-backend ambil via `GET /api/media/:id` (mirip panggil `graph.facebook.com/v21.0/:media_id`).
+- **Endpoint R2**: `https://6256144c9e85c0e4c0fec6b378b2ac1a.r2.cloudflarestorage.com/nawasena-chat`
+- **Path/Key**: `media/{sessionId}/{year}/{month}/{uniqueId}-{filename}`
+- **Webhook Delivery**: URL R2 langsung disematkan pada properti media (`messages[].image.id` / `url`, `messages[].video.id`, dll.), sehingga `nawasena-chat-backend` dan frontend `nawasena-chat` dapat langsung memutar/menampilkan media tanpa perlu membebani local disk atau proses unduh ulang.
+- **Fallback**: Jika S3 credentials belum diset, otomatis fallback ke local disk `./data/media`.
 
 ---
 
@@ -589,9 +591,8 @@ OpenWA/
 │   │   ├── health/                 # ✅ KEEP
 │   │   ├── events/                 # ✅ KEEP (WebSocket for QR)
 │   │   ├── media/                  # ✅ KEEP
-│   │   ├── contact/                # ✅ KEEP
-│   │   └── group/                  # ✅ KEEP
-│   │   # REMOVED: 22 other modules
+│   │   └── contact/                # ✅ KEEP
+│   │   # REMOVED: 23 other modules
 │   │
 │   └── database/
 │       ├── data-source.ts

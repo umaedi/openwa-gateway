@@ -13,7 +13,6 @@ import { EngineModule } from './engine/engine.module';
 import { LoggerModule } from './common/services/logger.module';
 import { EventsModule } from './modules/events/events.module';
 import { ContactModule } from './modules/contact/contact.module';
-import { GroupModule } from './modules/group/group.module';
 import { MediaModule } from './modules/media/media.module';
 import { SqlitePermissionsBoot } from './database/sqlite-file-permissions';
 
@@ -98,7 +97,7 @@ import { SqlitePermissionsBoot } from './database/sqlite-file-permissions';
       }),
     }),
 
-    // Core modules (9 modules only — lean gateway)
+    // Core modules (8 modules only — lean 1:1 gateway)
     LoggerModule,
     EventsModule,
     AuthModule,
@@ -108,7 +107,6 @@ import { SqlitePermissionsBoot } from './database/sqlite-file-permissions';
     WebhookModule,
     HealthModule,
     ContactModule,
-    GroupModule,
     MediaModule,
   ],
   providers: [SqlitePermissionsBoot],

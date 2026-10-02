@@ -168,15 +168,8 @@ export class SessionEngineEventWiring {
 
         host.messages.applyMessageEditQueued(id, message);
       },
-      onGroupEvent: (event): void => {
-        if (!host.isLiveEngine(id, engine)) return;
-        this.logger.debug(`Group event: ${event.kind} in ${event.groupId}`, {
-          sessionId: id,
-          groupId: event.groupId,
-          kind: event.kind,
-          action: 'group_event',
-        });
-        host.leafEvents.dispatchGroupEvent(id, event);
+      onGroupEvent: (_event): void => {
+        // Group processing removed in 1:1 Direct Chat gateway edition
       },
       onCall: (event: IncomingCallEvent): void => {
         if (!host.isLiveEngine(id, engine)) return;

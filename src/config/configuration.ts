@@ -213,6 +213,8 @@ export default () => ({
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
     },
     sessionDataPath: process.env.SESSION_DATA_PATH || './data/sessions',
+    // Maximum number of QR code refreshes before timing out and stopping the session (anti-spam / resource guard)
+    qrMaxRetries: parseInt(process.env.QR_MAX_RETRIES || '3', 10),
     // Baileys engine (used when ENGINE_TYPE=baileys). Multi-file auth state base dir; each session
     // gets its own subdirectory. Read by the Baileys plugin from the opaque engine config blob.
     baileys: {
@@ -504,16 +506,17 @@ export default () => ({
     })(),
   },
 
-  // Storage configuration
+  // Storage configuration (S3 / Cloudflare R2 default: nawasena-chat)
   storage: {
-    type: process.env.STORAGE_TYPE || 'local',
+    type: process.env.STORAGE_TYPE || 's3',
     localPath: process.env.STORAGE_LOCAL_PATH || './data/media',
     s3: {
-      bucket: process.env.S3_BUCKET,
-      region: process.env.S3_REGION,
+      bucket: process.env.S3_BUCKET || 'nawasena-chat',
+      region: process.env.S3_REGION || 'auto',
       accessKeyId: process.env.S3_ACCESS_KEY_ID,
       secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
-      endpoint: process.env.S3_ENDPOINT,
+      endpoint: process.env.S3_ENDPOINT || 'https://6256144c9e85c0e4c0fec6b378b2ac1a.r2.cloudflarestorage.com',
+      publicUrlPrefix: process.env.S3_PUBLIC_URL_PREFIX,
     },
   },
 });

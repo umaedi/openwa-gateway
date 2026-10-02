@@ -15,11 +15,7 @@ import { MessageDirection, type Message } from './entities/message.entity';
 import type { Session } from '../session/entities/session.entity';
 import type { Repository } from 'typeorm';
 import type { ConfigService } from '@nestjs/config';
-import { MessageSendService } from './message-send.service';
 import { BulkMessageService } from './bulk-message.service';
-import { StatusService } from '../status/status.service';
-import { CatalogService } from '../catalog/catalog.service';
-import { GroupService } from '../group/group.service';
 
 const DAY_MS = 86_400_000;
 
@@ -321,63 +317,6 @@ describe('send paths consult the governor', () => {
     // `message:sending` fires and nothing is persisted or sent.
     expect(hookManager.execute).not.toHaveBeenCalled();
     expect(engine.sendTextMessage).not.toHaveBeenCalled();
-  });
-
-  it('StatusService refuses before the plugin gate runs and before the engine is asked', async () => {
-    const hookManager = { execute: jest.fn() };
-    const engine = { postTextStatus: jest.fn() };
-    const pacing = refusing();
-    const service = new StatusService(
-      { require: () => engine } as never,
-      hookManager as never,
-      {} as never,
-      {} as never,
-      pacing as never,
-    );
-
-    await expect(service.postTextStatus('s1', 'hi', {})).rejects.toBeInstanceOf(HttpException);
-
-    expect(pacing.assertSendAllowed).toHaveBeenCalledWith('s1');
-    expect(hookManager.execute).not.toHaveBeenCalled();
-    expect(engine.postTextStatus).not.toHaveBeenCalled();
-  });
-
-  // This path does NOT go through MessageService, which is exactly why it needs its own call —
-  // sending a product is a real outbound chat message, not a catalog read.
-  it('CatalogService.sendProduct refuses before the engine is asked', async () => {
-    const engine = { sendProduct: jest.fn(), sendCatalog: jest.fn() };
-    const pacing = refusing();
-    const service = new CatalogService({ require: () => engine } as never, pacing as never);
-
-    await expect(service.sendProduct('s1', 'c@c.us', 'p1')).rejects.toBeInstanceOf(HttpException);
-    await expect(service.sendCatalog('s1', 'c@c.us')).rejects.toBeInstanceOf(HttpException);
-
-    expect(pacing.assertSendAllowed).toHaveBeenCalledTimes(2);
-    expect(engine.sendProduct).not.toHaveBeenCalled();
-    expect(engine.sendCatalog).not.toHaveBeenCalled();
-  });
-
-  // Group participant adds reach WhatsApp with no moderation gate of any kind, so the governor is
-  // the only thing standing between a caller and a bulk invite blast.
-  it('GroupService refuses participant adds and group creation before the engine is asked', async () => {
-    const engine = { addParticipants: jest.fn(), createGroup: jest.fn() };
-    const pacing = {
-      assertReachoutAllowed: jest.fn().mockRejectedValue(new HttpException({ code: SEND_PACING_LIMITED }, 429)),
-    };
-    const service = new GroupService({ require: () => engine } as never, pacing as never);
-
-    // Addressable ids on purpose: the participant guard runs BEFORE pacing, so a placeholder like
-    // `a@c.us` would 400 first and the governor would never be consulted — this test would then
-    // pass for the wrong reason while asserting nothing about pacing.
-    await expect(service.addParticipants('s1', 'g@g.us', ['628111111@c.us', '628222222@c.us'])).rejects.toBeInstanceOf(
-      HttpException,
-    );
-    await expect(service.createGroup('s1', 'New', ['628111111@c.us'])).rejects.toBeInstanceOf(HttpException);
-
-    expect(pacing.assertReachoutAllowed).toHaveBeenNthCalledWith(1, 's1', ['628111111@c.us', '628222222@c.us']);
-    expect(pacing.assertReachoutAllowed).toHaveBeenNthCalledWith(2, 's1', ['628111111@c.us']);
-    expect(engine.addParticipants).not.toHaveBeenCalled();
-    expect(engine.createGroup).not.toHaveBeenCalled();
   });
 
   // Bulk keeps its own inlined copy of the moderation gate, so it is the classic place for the two

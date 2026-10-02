@@ -304,6 +304,14 @@ export class WebhookDeliveryService implements OnModuleInit, OnModuleDestroy {
     try {
       await postWebhookPayload(webhook.url, body, headers, this.configService.get<number>('webhook.timeout', 10000));
 
+      this.logger.log(`Webhook delivered for ${payload.event}`, {
+        sessionId: payload.sessionId,
+        event: payload.event,
+        webhookUrl: webhook.url,
+        attempt,
+        action: 'webhook_delivered',
+      });
+
       try {
         await this.webhookRepository.update(webhook.id, {
           lastTriggeredAt: new Date(),

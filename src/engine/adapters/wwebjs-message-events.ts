@@ -21,7 +21,26 @@ export function registerWwebjsMessageEvents(client: Client, host: WwebjsEngineHo
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   client.on('message', async msg => {
     try {
+      // Ignore WhatsApp protocol, system sync, and e2e notifications
+      const rawType = String(msg.type || '').toLowerCase();
+      if (
+        rawType === 'protocol' ||
+        rawType === 'e2e_notification' ||
+        rawType === 'notification_template' ||
+        rawType === 'notification' ||
+        rawType === 'ciphertext' ||
+        rawType === 'gp2' ||
+        rawType === 'broadcast_notification'
+      ) {
+        return;
+      }
+
       const incomingMessage: IncomingMessage = buildIncomingMessageBase(msg);
+
+      // Skip unknown or unhandled internal message types
+      if (incomingMessage.type === 'unknown') {
+        return;
+      }
 
       // Attach the sender's contact info. getContact() gives the real sender (author in groups, from
       // in 1:1); we read only its synchronous fields and never the async getters (profile pic, about),

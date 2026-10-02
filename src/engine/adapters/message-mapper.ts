@@ -183,6 +183,7 @@ export function mapContactFields(contact: RawContactFields, full = false): Messa
   const out: MessageContact = {};
   if (contact.name) out.name = contact.name;
   if (contact.pushname) out.pushName = contact.pushname;
+  if (contact.number) out.number = contact.number;
   if (!full) return out;
   const id = contact.id?._serialized;
   if (id) out.id = id;
