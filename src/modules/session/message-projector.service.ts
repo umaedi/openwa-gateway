@@ -181,10 +181,14 @@ export class MessageProjector {
       }
     }
 
+    const rawFrom = finalMessage.from;
+    const resolvedPhone = await this.lidResolver.resolveSenderPhone(id, rawFrom);
+
     await this.persistInboundMessage(id, finalMessage);
 
     const webhookPayload: Record<string, unknown> = {
       ...(finalMessage as unknown as Record<string, unknown>),
+      ...(resolvedPhone ? { senderPhone: resolvedPhone } : {}),
       ...(mediaUrl ? { mediaUrl } : {}),
       ...(mediaPath ? { mediaPath } : {}),
     };

@@ -161,7 +161,11 @@ export class MetaWebhookTransformer {
     if (event === 'message.received') {
       const fromJid = (data.from as string) || (data.author as string) || '';
       const contactObj = (data.contact as Record<string, unknown>) || {};
-      const resolvedNumber = (contactObj.number as string) || (data.phone as string) || '';
+      const resolvedNumber =
+        (data.senderPhone as string) ||
+        (contactObj.number as string) ||
+        (data.phone as string) ||
+        '';
       const from = resolvedNumber ? this.cleanWaId(resolvedNumber) : this.cleanWaId(fromJid);
       const pushName = (contactObj.pushName as string) || (contactObj.name as string) || (data.pushName as string) || (data.notifyName as string) || (data.chatName as string) || from;
       const rawId = (data.id as string) || (data.waMessageId as string) || '';
