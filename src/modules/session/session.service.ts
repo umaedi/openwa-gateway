@@ -67,6 +67,14 @@ function isTransientLaunchFailure(error: unknown): boolean {
 
 /** Pause between sequential auto-start launches so a burst of Chromium boots does not spike the host. */
 export const AUTOSTART_THROTTLE_MS = 2_000;
+/**
+ * Auto-start attempts per session. Right after a host reboot the network (or clock sync) is often
+ * not ready yet, so the first Chromium launch fails with e.g. `net::ERR_NETWORK_CHANGED` and the
+ * session would otherwise stay `failed` until someone starts it by hand.
+ */
+export const AUTOSTART_MAX_ATTEMPTS = 3;
+/** Backoff before retry n (1-based): 30s, then 60s. */
+export const AUTOSTART_RETRY_BASE_MS = 30_000;
 
 /**
  * The session-record API: CRUD over the sessions table, aggregate stats, and the thin engine query
@@ -212,18 +220,28 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
         return;
       }
       const session = sessions[i];
-      try {
-        await this.start(session.id);
-        this.logger.log(`Auto-started session: ${session.name}`, {
-          sessionId: session.id,
-          action: 'auto_start_success',
-        });
-      } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        this.logger.error(`Auto-start failed for session: ${session.name}`, errorMessage, {
-          sessionId: session.id,
-          action: 'auto_start_failed',
-        });
+      for (let attempt = 1; attempt <= AUTOSTART_MAX_ATTEMPTS; attempt++) {
+        try {
+          await this.start(session.id);
+          this.logger.log(`Auto-started session: ${session.name}`, {
+            sessionId: session.id,
+            action: 'auto_start_success',
+            attempt,
+          });
+          break;
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          const willRetry = attempt < AUTOSTART_MAX_ATTEMPTS && !this.shuttingDown;
+          this.logger.error(`Auto-start failed for session: ${session.name}`, errorMessage, {
+            sessionId: session.id,
+            action: 'auto_start_failed',
+            attempt,
+            willRetry,
+          });
+          if (!willRetry) break;
+          await setTimeout(AUTOSTART_RETRY_BASE_MS * attempt);
+          if (this.shuttingDown) break;
+        }
       }
       // Throttle between sequential Chromium launches; no need to wait after the last one.
       if (i < sessions.length - 1) {

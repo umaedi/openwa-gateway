@@ -25,6 +25,10 @@
  *      participant writes report which requested ids resolved to members, gated the same way.
  *   7. `node scripts/patch-wwebjs-block.js --best-effort` when present, restoring block and
  *      unblock after WhatsApp Web removed the contact resolver they used.
+ *   7a. `node scripts/patch-wwebjs-media-x-id.js --best-effort` when present — backport of upstream
+ *      #201923 so media sends stop failing with `t: t`.
+ *   7b. `node scripts/patch-wwebjs-download-mimetype.js --best-effort` when present — forwards the
+ *      mimetype to downloadAndMaybeDecrypt so inbound media downloads stop failing with `t: t`.
  *   8. `node scripts/patch-baileys-appstate.js --best-effort` when present, the app-state resync
  *      bound, gated the same way.
  *   9. `node scripts/patch-baileys-newsletter-create.js --best-effort` when present, the
@@ -124,6 +128,24 @@ function planSteps(root, env = process.env) {
       name: 'whatsapp-web.js block/unblock LID repair (scripts/patch-wwebjs-block.js --best-effort)',
       command: process.execPath,
       args: [blockPatcher, '--best-effort'],
+      options: { stdio: 'inherit', cwd: root, env: cleanEnv },
+    });
+  }
+  const mediaXIdPatcher = path.join(root, 'scripts', 'patch-wwebjs-media-x-id.js');
+  if (fs.existsSync(mediaXIdPatcher)) {
+    steps.push({
+      name: 'whatsapp-web.js media send __x_id fix (scripts/patch-wwebjs-media-x-id.js --best-effort)',
+      command: process.execPath,
+      args: [mediaXIdPatcher, '--best-effort'],
+      options: { stdio: 'inherit', cwd: root, env: cleanEnv },
+    });
+  }
+  const downloadMimetypePatcher = path.join(root, 'scripts', 'patch-wwebjs-download-mimetype.js');
+  if (fs.existsSync(downloadMimetypePatcher)) {
+    steps.push({
+      name: 'whatsapp-web.js download mimetype fix (scripts/patch-wwebjs-download-mimetype.js --best-effort)',
+      command: process.execPath,
+      args: [downloadMimetypePatcher, '--best-effort'],
       options: { stdio: 'inherit', cwd: root, env: cleanEnv },
     });
   }
